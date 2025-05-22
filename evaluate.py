@@ -1,180 +1,141 @@
-from sklearn.metrics import precision_score, recall_score
-import torch
-from model import Discriminator, Generator
-from utils import load_discriminator_model, load_model
-from torchmetrics.image.fid import FrechetInceptionDistance
-import argparse
-import numpy as np
-from scipy.linalg import sqrtm
-from torchvision import models
-import torchvision.transforms as transforms
-from torchvision import datasets
-from torch.utils.data import DataLoader, Dataset
+"""
+    evaluate.py
+
+    This script evaluates the performance of a trained GAN model by computing:
+    - Precision and Recall: using the trained Discriminator
+    - Frechet Inception Distance (FID): using torchmetrics
+
+    It expects:
+    - A directory of generated images (fake samples)
+    - A trained Generator and Discriminator checkpoint
+    - The MNIST test dataset as the real distribution
+
+    Usage:
+        python evaluate.py --dir samples/ --checkpoint checkpoints/
+"""
+
 import os
-from PIL import Image
+import argparse
+import logging
+import torch
+from torchvision import transforms, datasets
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import precision_score, recall_score, f1_score
+from torchmetrics.image.fid import FrechetInceptionDistance
 
-# def load_fake_images(directory, transform):
-#     fake_images = []
-    
-#     for filename in os.listdir(directory):
-#         if filename.endswith(".png") or filename.endswith(".jpg"):
-#             path = os.path.join(directory, filename)
-#             image = Image.open(path)#.convert("L")
-#             # image = transform(image)
-#             fake_images.append(image)
-    
-#     fake_images_tensor = torch.stack(fake_images)
-#     return fake_images_tensor
+from models import Generator, Discriminator
+from utils import load_model, load_discriminator_model
+from loggings import setup_logging
 
-class FakeImageDataset(Dataset):
-    def __init__(self, directory, transform):
-        self.directory = directory
-        self.transform = transform
-        self.image_files = [f for f in os.listdir(directory) if f.endswith(".png") or f.endswith(".jpg")]
-        
-    def __len__(self):
-        return len(self.image_files)
-    
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.directory, self.image_files[idx])
-        image = Image.open(img_path).convert("L")  # Convert to grayscale for MNIST
-        return self.transform(image)
-
-def calculate_precision_recall(discriminator, real_data, fake_data):
-    # Generate samples
-    # noise = torch.randn(num_samples, noise_dim).to(device)
-    # fake_data = generator(noise)
-
-    # Combine real and fake samples
-    # print(fake_data.shape, real_data.shape)
-    all_data = torch.cat((real_data, fake_data), dim=0)
-    all_data = all_data.view(-1, 784)
-    # print(all_data.shape)
-    labels = torch.cat((torch.ones(real_data.size(0)), torch.zeros(fake_data.size(0))), dim=0)
-    # labels = labels.view(-1, 784)
-    # print(labels.shape)
-
-    # Evaluate discriminator
-    with torch.no_grad():
-        preds = discriminator(all_data)
-        preds_labels = (preds > 0).float()  # Use a threshold to classify
-
-    # Calculate precision and recall
-    precision = precision_score(labels.cpu(), preds_labels.cpu())
-    recall = recall_score(labels.cpu(), preds_labels.cpu())
-    
-    return precision, recall
-
-def get_inception_features(images):
-    # Load Inception v3 model
-    inception_model = models.inception_v3(pretrained=True, transform_input=True)
-    inception_model.eval()
-
-    with torch.no_grad():
-        features = inception_model(images)
-        
-    return features
-
-def calculate_fid(real_images, fake_images):
-    # Get features from real and fake images
-    real_features = get_inception_features(real_images)
-    fake_features = get_inception_features(fake_images)
-
-    # Calculate mean and covariance for real and fake features
-    mu_real = np.mean(real_features, axis=0)
-    sigma_real = np.cov(real_features, rowvar=False)
-
-    mu_fake = np.mean(fake_features, axis=0)
-    sigma_fake = np.cov(fake_features, rowvar=False)
-
-    # Calculate FID score
-    diff = mu_real - mu_fake
-    covmean = sqrtm(sigma_real.dot(sigma_fake))
-
-    # Numerical stability
-    if np.iscomplexobj(covmean):
-        covmean = covmean.real
-
-    fid = diff.dot(diff) + np.trace(sigma_real + sigma_fake - 2 * covmean)
-    return fid
-
-def fid_calc_fun(test_loader, G):
-    
-    fid = FrechetInceptionDistance(feature=64).cuda()
-    fid.reset()
+def generate_fake_images(G, total, batch_size=64, latent_dim=100, device='cuda'):
     G.eval()
+    fake_images = []
 
-    for real_data, _ in test_loader:
-        real_data = real_data.view(-1, mnist_dim).cuda()
-        noise = torch.randn(real_data.size(0), 100).cuda()
-        fake_data = G(noise)
-                
-        real_data_rgb = real_data.view(-1, 1, 28, 28).repeat(1, 3, 1, 1)
-        fake_data_rgb = fake_data.view(-1, 1, 28, 28).repeat(1, 3, 1, 1)
+    with torch.no_grad():
+        while len(fake_images) < total:
+            z = torch.randn(min(batch_size, total - len(fake_images)), latent_dim, device=device)
+            fake = G(z).cpu().view(-1, 1, 28, 28)
+            fake_images.append(fake)
+            torch.cuda.empty_cache()
 
-        real_data_rgb_uint8 = ((real_data_rgb + 1) * 127.5).clamp(0, 255).to(torch.uint8)
-        fake_data_uint8 = ((fake_data_rgb + 1) * 127.5).clamp(0, 255).to(torch.uint8)
+    return torch.cat(fake_images, dim=0)
 
-        fid.update(real_data_rgb_uint8, real=True)
-        fid.update(fake_data_uint8, real=False)
+def compute_fid(G, real_loader, fake_loader, batch_size, num_samples, device):
+    fid = FrechetInceptionDistance(feature=64).to(device)
+    fid.reset()
+
+    def preprocess(images):
+        if images.shape[1] == 1:
+            images = images.repeat(1, 3, 1, 1)
+        images = (images + 1.0) * 127.5
+        return images.clamp(0, 255).to(torch.uint8)
+
+    # real images
+    count = 0
+    for batch, _ in real_loader:
+        if count >= num_samples: break
+        current_batch = batch[:min(batch_size, num_samples - count)]
+        fid.update(preprocess(current_batch).to(device), real=True)
+        count += len(current_batch)
+        torch.cuda.empty_cache()
+
+    # fake images
+    for batch_tuple in fake_loader:
+        fake_batch = batch_tuple[0].to(device)
+        fid.update(preprocess(fake_batch), real=False)
+        torch.cuda.empty_cache()
 
     return fid.compute().item()
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Generate Normalizing Flow.')
-    parser.add_argument("--batch_size", type=int, default=2048,
-                      help="The batch size to use for training.")
-    parser.add_argument("--dir", help="Directory of fake images.")
-    parser.add_argument("--checkpoint", help="Checkpoint path", default="checkpoints")
-    args = parser.parse_args()
+def calculate_precision_recall_f1(D, real_data, fake_data, device):
+    real_data = real_data.view(-1, 784).to(device)
+    fake_data = fake_data.view(-1, 784).to(device)
 
+    all_data = torch.cat([real_data, fake_data])
+    labels = torch.cat([torch.ones(real_data.size(0)), torch.zeros(fake_data.size(0))])
+
+    with torch.no_grad():
+        preds = D(all_data)
+        preds = (preds > 0.5).float().squeeze()
+
+    precision = precision_score(labels.cpu().numpy(), preds.cpu().numpy(), zero_division=0)
+    recall = recall_score(labels.cpu().numpy(), preds.cpu().numpy(), zero_division=0)
+    f1 = f1_score(labels.cpu().numpy(), preds.cpu().numpy(), zero_division=0)
+
+    return precision, recall, f1
+
+def evaluate(args):
+    """
+        Main evaluation routine: computes precision, recall, f1 score, and FID.
+
+        Args:
+            args: Parsed command-line arguments
+    """
+    setup_logging()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     mnist_dim = 784
 
-    model = Discriminator(mnist_dim).cuda()
-    model = load_discriminator_model(model, args.checkpoint)
-    model = torch.nn.DataParallel(model).cuda()
-
-    print("Model loaded")
+    logging.info("Loading models...")
+    G = load_model(Generator(g_output_dim=mnist_dim).to(device), args.checkpoint)
+    D = load_discriminator_model(Discriminator(mnist_dim).to(device), args.checkpoint)
+    G = torch.nn.DataParallel(G).to(device).eval()
+    D = torch.nn.DataParallel(D).to(device).eval()
 
     transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize(mean=(0.5), std=(0.5))])
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
-    test_dataset = datasets.MNIST(root='data/MNIST/', train=False, transform=transform, download=False)
-
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
-                                              batch_size=args.batch_size, shuffle=False)
-    print("Real dataset loaded")
-
-    # Set up a DataLoader for the fake images in batches
-    fake_dataset = FakeImageDataset(args.dir, transform=transform)
-    fake_loader = DataLoader(fake_dataset, batch_size=args.batch_size, shuffle=False)
-    print("Fake dataset loaded")
-
-    precision_scores = []
-    recall_scores = []
-    fid_scores = []
-    print("Calculating scores")
-
-    for fake_batch in fake_loader:
-        real_batch = next(iter(test_loader))[0]
-        
-        # Calculate metrics for the current batch
-        precision, recall = calculate_precision_recall(model, real_batch, fake_batch)
-        # fid = calculate_fid(real_batch, fake_batch)
-        
-        # Append results for averaging later
-        precision_scores.append(precision)
-        recall_scores.append(recall)
-        # fid_scores.append(fid)
+    logging.info("Loading datasets...")
+    real_dataset = datasets.MNIST(root='data/MNIST', train=False, transform=transform, download=True)
+    real_loader = DataLoader(real_dataset, batch_size=args.batch_size, shuffle=False)
     
-    print("Averaging scores")
-    # Average the metrics over all batches
-    average_precision = np.mean(precision_scores)
-    average_recall = np.mean(recall_scores)
-    average_fid = np.mean(fid_scores)
+    real_images = []
+    for batch, _ in real_loader:
+        real_images.append(batch)
+        if sum(x.size(0) for x in real_images) >= args.num_samples:
+            break
+    real_images = torch.cat(real_images)[:args.num_samples]
 
-    G = load_model(Generator(g_output_dim=mnist_dim).cuda(), args.checkpoint)
-    fid = fid_calc_fun(test_loader, G)
+    logging.info("Generating fake samples...")
+    fake_images = generate_fake_images(G, total=args.num_samples, batch_size=args.batch_size, device=device)
+    fake_loader = DataLoader(TensorDataset(fake_images), batch_size=args.batch_size, shuffle=False)
+    
+    logging.info("Calculating Precision, Recall, and F1...")
+    precision, recall, f1_score = calculate_precision_recall_f1(D, real_images, fake_images, device)
 
-    print(f'Precision: {average_precision}, Recall: {average_recall}, FID: {fid}')
+    logging.info("Calculating FID...")
+    fid = compute_fid(G, real_loader, fake_loader, args.batch_size, num_samples=args.num_samples, device=device)
+
+    logging.info(f"Precision: {precision:.4f}")
+    logging.info(f"Recall:    {recall:.4f}")
+    logging.info(f"F1 score:  {f1_score:.4f}")
+    logging.info(f"FID Score: {fid:.4f}")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Evaluate GAN outputs with precision, recall, and FID.")
+    parser.add_argument('--batch_size', type=int, default=64, help="The batch size to use for training.")
+    parser.add_argument('--checkpoint', type=str, default="checkpoints", help="Checkpoint directory")
+    parser.add_argument('--num_samples', type=int, default=10000, help="Number of samples.")
+    args = parser.parse_args()
+    evaluate(args)
