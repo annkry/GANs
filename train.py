@@ -50,7 +50,7 @@ def main(args):
                 D_train(x, G, D, D_optimizer, criterion)
                 G_train(x, G, D, G_optimizer, criterion)
 
-            if epoch % 10 == 0:
+            if (epoch - 1) % 10 == 0:
                 save_models(G, D, args.checkpoint)
         logging.info(f"Training completed, models saved in '{args.checkpoint}'.")
 
