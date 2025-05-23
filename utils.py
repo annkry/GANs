@@ -63,7 +63,10 @@ def D_train_with_DP(real_data, fake_data, real_labels, fake_labels, D, D_optimiz
 
 def G_train_with_DP(G, D, batch_size, criterion, real_labels, G_optimizer, device):
     G.zero_grad()
-    D.disable_hooks()
+    if isinstance(D, torch.nn.DataParallel):
+        D.module.disable_hooks()
+    else:
+        D.disable_hooks()
 
     # generate fake data
     noise = torch.randn(batch_size, 100, device=device)
@@ -74,7 +77,10 @@ def G_train_with_DP(G, D, batch_size, criterion, real_labels, G_optimizer, devic
     G_loss = criterion(fake_output, real_labels)
     G_loss.backward()
     G_optimizer.step()
-    D.enable_hooks()
+    if isinstance(D, torch.nn.DataParallel):
+        D.module.enable_hooks()
+    else:
+        D.enable_hooks()
 
 def save_models(G, D, folder):
     torch.save(G.state_dict(), os.path.join(folder,'G.pth'))

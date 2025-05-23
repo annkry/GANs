@@ -38,7 +38,7 @@ def main(args):
 
     criterion = nn.BCELoss()
 
-    if args.mode == "train":
+    if args.mode == "train" or args.mode == "collab":
         logging.info("Running in TRAIN mode")
         
         G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
@@ -54,8 +54,8 @@ def main(args):
                 save_models(G, D, args.checkpoint)
         logging.info(f"Training completed, models saved in '{args.checkpoint}'.")
 
-    elif args.mode == "collab":
-        collaborative_training(train_loader, mnist_dim, args)
+        if args.mode == "collab":
+            collaborative_training(train_loader, mnist_dim, args)
 
     elif args.mode == "diff_privacy":
         logging.info("Running in DIFF_PRIVACY mode")
@@ -63,13 +63,13 @@ def main(args):
         G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
         D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
 
-        # Attach Privacy Engine to the Discriminator
+        # attach Privacy Engine to the Discriminator
         privacy_engine = PrivacyEngine()
         D, D_optimizer, private_train_loader = privacy_engine.make_private(
                 module=D,
                 optimizer=D_optimizer,
                 data_loader=train_loader,
-                noise_multiplier=1.0,
+                noise_multiplier=0.3,
                 max_grad_norm=1.0
         )
 

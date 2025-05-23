@@ -1,14 +1,12 @@
 
 # Generative Adversarial Networks with Privacy and Collaboration
 
-## Overview
+This project presents an  implementation of **Generative Adversarial Networks (GANs)** trained on MNIST, with advanced features for:
 
-This project presents a well-engineered implementation of **Generative Adversarial Networks (GANs)** trained on MNIST, with advanced features for:
-
-- **Differential Privacy** via [Opacus](https://opacus.ai)
-- **Collaborative Refinement** with sample perturbations
-- **Latent Space Exploration** and interpolation techniques
-- **Evaluation** using **FID**, precision, and recall
+- **Differential privacy** via [opacus](https://opacus.ai)
+- **Collaborative refinement** with sample perturbations
+- **Latent space exploration** and interpolation techniques
+- **Evaluation** using FID, F1 score, Precision, and Recall
 - Reproducibility through CLI tools and structured logging
 
 ---
@@ -42,14 +40,13 @@ pip install -r requirements.txt
 
 ```bash
 # standard GAN 
-python train.py --mode train --epochs 50
+python train.py --mode train --epochs 75 --checkpoint checkpoint_GAN
 
 # with opacus differential privacy
-python train.py --mode diff_privacy --epochs 50
+python train.py --mode diff_privacy --epochs 20 --checkpoint checkpoint_DP
 
-# perturbation-based collaborative refinement
-python train.py --mode train --epochs 100 --checkpoint checkpoint_collab
-python train.py --mode collab --checkpoint checkpoint_collab
+# training + perturbation-based collaborative refinement
+python train.py --mode collab --epochs 50 --checkpoint checkpoint_collab
 ```
 
 ### 3. Generate samples (three modes)
@@ -77,7 +74,7 @@ python evaluate.py --checkpoint checkpoints --num_samples 1000
 This computes:
 - **Precision & Recall** using the trained Discriminator
 - **F1 score**
-- **FID** using [TorchMetrics](https://torchmetrics.readthedocs.io)
+- **FID** using [torchMetrics](https://torchmetrics.readthedocs.io)
 
 ---
 
@@ -100,33 +97,23 @@ This computes:
 
 ---
 
-<!-- ## Example Results
+### Results comparison
 
-<!-- This is for classical GAN -->
+| Model variant       | Generated samples                           | Latent interpolation                           |
+|---------------------|---------------------------------------------|-------------------------------------------------|
+| **GAN**             | ![GAN Samples](assets/grid_GAN.png)         | ![GAN Interpolation](assets/interpolations_grid_GAN.png)         |
+| **GAN + DP**        | ![DP Samples](assets/grid_DP.png)           | ![DP Interpolation](assets/interpolations_grid_DP.png)           |
+| **GAN + Collab**    | ![Collab Samples](assets/grid_collab.png)   | ![Collab Interpolation](assets/interpolations_grid_collab.png)   |
 
-<!-- ### Generated samples
-
-<p align="center">
-  <img src="assets/grid_GAN.png" alt="Sample grid" width="400"/>
-</p>
-
----
-
-### Latent space interpolation
-
-<p align="center">
-  <img src="assets/interpolations_grid_GAN.png" alt="Latent interpolation" width="600"/>
-</p>
 
 ---
 
-| Metric             |      GAN  |   DP GAN |
-|--------------------|-----------|----------|
-| FID (1000 samples) | ~0.0829   | ~4.9950  |
-| Precision          | ~0.0588   | ~0.9851  |
-| Recall             | ~0.7560   | ~0.9910  |
-| F1 score           | ~0.1091   | ~0.9880  |
+| Metric             |      GAN  |   GAN with DP | GAN with collab
+|--------------------|-----------|---------------|----------------------|
+| FID (1000 samples) | ~0.0829   | ~1.1813       | ~0.2264
+| Precision          | ~0.0588   | ~0.2719       | ~0.3834
+| Recall             | ~0.7560   | ~0.6150       | ~0.9190
+| F1 score           | ~0.1091   | ~0.3771       | ~0.5411
 
-<sub>*Evaluated on MNIST with privacy = off. Results may vary with epsilon level.*</sub>
 
---- --> 
+---
