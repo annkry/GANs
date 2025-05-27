@@ -1,8 +1,16 @@
-import torch
+"""
+    Handles image generation from a trained Generator model.
+    Supports:
+    - Random sampling
+    - Latent vector interpolation (linear, Dirichlet)
+    - Latent space grid visualization
+"""
+
 import os
+import torch
+import logging
 import argparse
 import numpy as np
-import logging
 from torchvision.utils import save_image, make_grid
 
 from models import Generator
@@ -10,10 +18,12 @@ from utils import load_model
 from loggings import setup_logging
 
 def generate_images(G, num_samples=10000, latent_dim=100, device='cuda'):
+    """Generates random samples using the generator."""
     z = torch.randn(num_samples, latent_dim, device=device)
     return G(z).detach().cpu().view(-1, 1, 28, 28)
 
 def generate_dirichlet_interpolations(G, num_interpolations, interpolation_steps, latent_dim, device):
+    """Generates interpolated samples by mixing latent vectors using Dirichlet distribution."""
     images = []
 
     with torch.no_grad():
@@ -36,6 +46,7 @@ def generate_dirichlet_interpolations(G, num_interpolations, interpolation_steps
     return torch.cat(images, dim=0)  # shape: [num_interpolations * steps, 1, 28, 28]
 
 def generate_linear_interpolations(G, num_interpolations, interpolation_steps, latent_dim, device):
+    """Generates linear interpolations between pairs of latent vectors."""
     G.eval()
     all_samples = []
 
@@ -54,11 +65,13 @@ def generate_linear_interpolations(G, num_interpolations, interpolation_steps, l
     return torch.cat(all_samples, dim=0)  # shape: [num_interpolations * interpolation_steps, 1, 28, 28]
 
 def generate_latent_grid(G, rows=10, cols=10, latent_dim=100, device='cuda'):
+    """Creates a grid of generated samples for visual inspection."""
     z = torch.randn(rows * cols, latent_dim, device=device)
     gen_imgs = G(z).detach().cpu().view(-1, 1, 28, 28)
     return make_grid(gen_imgs, nrow=cols, normalize=True)
 
 def main(args):
+    """Main function to handle various sample generation modes."""
     os.makedirs(args.output_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Using device: {device}")

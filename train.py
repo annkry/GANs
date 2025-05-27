@@ -1,12 +1,19 @@
+"""
+    Main training script for GANs supporting multiple modes:
+    - Standard training
+    - Differentially private training (via Opacus)
+    - Collaborative training with perturbation-based refinement
+"""
+
+import os
 import torch
 import logging
-import os
-from tqdm import trange
 import argparse
-from torchvision import datasets, transforms
 import torch.nn as nn
+from tqdm import trange
 import torch.optim as optim
 from opacus import PrivacyEngine
+from torchvision import datasets, transforms
 
 from models import Generator, Discriminator
 from utils import D_train, G_train, save_models, D_train_with_DP, G_train_with_DP, unwrap_state_dict
@@ -14,6 +21,7 @@ from loggings import setup_logging
 from collab_mode import collaborative_training
 
 def get_data_loaders(batch_size):
+    """Creates train and test loaders for MNIST dataset."""
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=(0.5,), std=(0.5,))
@@ -27,6 +35,7 @@ def get_data_loaders(batch_size):
     return train_loader, test_loader
 
 def main(args):
+    """Main entry point for training in standard, differential privacy, or collaborative modes."""
     setup_logging()
     os.makedirs(args.checkpoint, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

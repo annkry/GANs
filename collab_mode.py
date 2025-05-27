@@ -1,8 +1,13 @@
+"""
+    Implements collaborative GAN training mode using perturbation refinement.
+    Combines Discriminator feedback with perturbation steps to improve Generator quality.
+"""
+
 import torch
+import logging
+from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
-from tqdm import tqdm
-import logging
 
 from models import Generator, Discriminator
 from utils import save_models, load_model, load_discriminator_model
@@ -10,6 +15,7 @@ from datasets import NoiseDataset
 from loggings import setup_logging
 
 def collaborative_training(train_loader, mnist_dim, args):
+    """Refines GAN training with collaborative perturbation learning."""
     setup_logging()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info("Running in COLLAB mode")

@@ -1,8 +1,14 @@
-import torch
+"""
+    Contains utility functions for GAN training and model management.
+    Includes training steps for Discriminator and Generator (standard and DP),
+    as well as model save/load utilities and state dict unwrapping.
+"""
+
 import os
+import torch
 
 def D_train(x, G, D, D_optimizer, criterion):
-    #=======================Train the discriminator=======================#
+    """Standard training step for the Discriminator."""
     D.zero_grad()
 
     # train discriminator on real
@@ -30,7 +36,7 @@ def D_train(x, G, D, D_optimizer, criterion):
     return  D_loss.data.item()
 
 def G_train(x, G, D, G_optimizer, criterion):
-    #=======================Train the generator=======================#
+    """Standard training step for the Generator."""
     G.zero_grad()
 
     z = torch.randn(x.shape[0], 100).cuda()
@@ -47,6 +53,8 @@ def G_train(x, G, D, G_optimizer, criterion):
     return G_loss.data.item()
 
 def D_train_with_DP(real_data, fake_data, real_labels, fake_labels, D, D_optimizer, criterion):
+    """Differentially private Discriminator training."""
+
     # train Discriminator
     D_optimizer.zero_grad()
     D.zero_grad()
@@ -62,6 +70,7 @@ def D_train_with_DP(real_data, fake_data, real_labels, fake_labels, D, D_optimiz
     return D_loss.item()
 
 def G_train_with_DP(G, D, batch_size, criterion, real_labels, G_optimizer, device):
+    """Differentially private Generator training."""
     G.zero_grad()
     if isinstance(D, torch.nn.DataParallel):
         D.module.disable_hooks()
@@ -83,21 +92,24 @@ def G_train_with_DP(G, D, batch_size, criterion, real_labels, G_optimizer, devic
         D.enable_hooks()
 
 def save_models(G, D, folder):
+    """Saves Generator and Discriminator model weights to disk."""
     torch.save(G.state_dict(), os.path.join(folder,'G.pth'))
     torch.save(D.state_dict(), os.path.join(folder,'D.pth'))
 
 def load_model(G, folder):
+    """Loads Generator weights from checkpoint folder."""
     ckpt = torch.load(os.path.join(folder,'G.pth'), weights_only=True)
     G.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     return G
 
 def load_discriminator_model(D, folder):
+    """Loads Discriminator weights from checkpoint folder."""
     ckpt = torch.load(os.path.join(folder,'D.pth'), weights_only=True)
     D.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     return D
 
 def unwrap_state_dict(state_dict):
-    """Remove DataParallel and PrivacyEngine prefixes like '_module.module.'"""
+    """Strips prefixes from state dict keys for compatibility (DataParallel, PrivacyEngine)."""
     new_state_dict = {}
     for k, v in state_dict.items():
         new_k = k

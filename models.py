@@ -1,10 +1,14 @@
+"""
+    Defines the Generator and Discriminator architectures used in GAN training.
+    - Generator: Converts random noise into image-like tensors.
+    - Discriminator: Distinguishes between real and generated images.
+"""
+
 import torch
 import torch.nn as nn
 
 class Generator(nn.Module):
-    """
-        Generator network that takes a 100-dimensional noise vector and produces an image.
-    """
+    """Generator network for producing MNIST-like images from noise."""
 
     def __init__(self, g_output_dim):
         super(Generator, self).__init__()
@@ -17,9 +21,7 @@ class Generator(nn.Module):
         self.leaky_relu = nn.LeakyReLU(0.2)
 
     def forward(self, x):
-        """
-            Forward pass through the generator.
-        """
+        """Forward pass through the generator."""
         x = self.leaky_relu(self.fc1(x))
         x = self.dropout(x)
         x = self.leaky_relu(self.fc2(x))
@@ -30,9 +32,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    """
-        Discriminator network that receives an image and predicts if it's real or generated.
-    """
+    """Discriminator network to classify real vs generated images."""
 
     def __init__(self, d_input_dim):
         super(Discriminator, self).__init__()
@@ -45,9 +45,7 @@ class Discriminator(nn.Module):
         self.leaky_relu = nn.LeakyReLU(0.2)
 
     def forward(self, x):
-        """
-            Forward pass through the discriminator.
-        """
+        """Forward pass through the discriminator."""
         x = self.leaky_relu(self.fc1(x))
         x = self.dropout(x)
         x = self.leaky_relu(self.fc2(x))
