@@ -8,6 +8,10 @@
 import os
 import torch
 import logging
+from loggings import setup_logging
+
+setup_logging()
+
 import argparse
 import torch.nn as nn
 from tqdm import trange
@@ -17,7 +21,6 @@ from torchvision import datasets, transforms
 
 from models import Generator, Discriminator
 from utils import D_train, G_train, save_models, D_train_with_DP, G_train_with_DP, unwrap_state_dict
-from loggings import setup_logging
 from collab_mode import collaborative_training
 
 def get_data_loaders(batch_size):
@@ -36,7 +39,6 @@ def get_data_loaders(batch_size):
 
 def main(args):
     """Main entry point for training in standard, differential privacy, or collaborative modes."""
-    setup_logging()
     os.makedirs(args.checkpoint, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_loader, _ = get_data_loaders(args.batch_size)
