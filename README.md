@@ -38,30 +38,35 @@ pip install -r requirements.txt
 
 ### 2. Train the model (three modes)
 
+Standard GAN 
 ```bash
-# standard GAN 
 python train.py --mode train --epochs 75 --checkpoint checkpoint_GAN
-
-# with opacus differential privacy
+```
+With opacus differential privacy
+```bash
 python train.py --mode diff_privacy --epochs 20 --checkpoint checkpoint_DP
-
-# training + perturbation-based collaborative refinement
+```
+Training + perturbation-based collaborative refinement
+```bash
 python train.py --mode collab --epochs 50 --checkpoint checkpoint_collab
 ```
 
 ### 3. Generate samples (three modes)
 
+Interpolated samples via latent Dirichlet
 ```bash
-# interpolated samples via latent Dirichlet
 python generate.py --mode interpolate --interpolation_mode dirichlet
-
-# linearly interpolated samples
+```
+Linearly interpolated samples
+```bash
 python generate.py --mode interpolate --interpolation_mode linear
-
-# grid of latent samples
+```
+Grid of latent samples
+```bash
 python generate.py --mode grid
-
-# random sampling
+```
+Random sampling
+```bash
 python generate.py --mode random --num_samples 10000
 ```
 
@@ -115,5 +120,17 @@ This computes:
 | Recall             | ~0.7560   | ~0.6150       | ~0.9190
 | F1 score           | ~0.1091   | ~0.3771       | ~0.5411
 
+
+---
+
+## References
+
+- Y. Liu, P. Kothari, and A. Alahi, “Collaborative sampling in generative adversarial networks”, *Proceedings of the AAAI Conference on Artificial Intelligence*, vol. 34, no. 04, pp. 4948-4956, Apr. 2020.
+
+- A. Bie, G. Kamath, and G. Zhang, *Private GANs, revisited*, 2023. arXiv: [2302.02936 [cs.LG]](https://arxiv.org/abs/2302.02936).
+
+- A. Radford, L. Metz, and S. Chintala, *Unsupervised representation learning with deep convolutional generative adversarial networks*, 2015. arXiv: [1511.06434 [cs.LG]](https://arxiv.org/abs/1511.06434).
+
+- T. Karras, S. Laine, and T. Aila, “A Style-Based Generator Architecture for Generative Adversarial Networks”, *IEEE Transactions on Pattern Analysis & Machine Intelligence*, vol. 43, no. 12, pp. 4217-4228, Dec. 2021.
 
 ---
